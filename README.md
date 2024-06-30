@@ -2,6 +2,10 @@
 
 This is the PA for my D326 class for WGU. This is an SQL management class. Uploaded to help out anyone who is struggle for ideas. I will put the rubric below. 
 
+
+
+
+
 Your submission must be your original work. No more than a combined total of 30% of the submission and no more than a 10% match to any one individual source can be directly quoted or closely paraphrased from sources, even if cited correctly. The similarity report that is provided when you submit your task can be used as a guide.
 
 You must use the rubric to direct the creation of your submission because it provides detailed criteria that will be used to evaluate your work. Each requirement below may be evaluated by more than one rubric aspect. The rubric aspect titles may contain hyperlinks to relevant portions of the course.
