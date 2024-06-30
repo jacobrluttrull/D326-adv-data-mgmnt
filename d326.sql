@@ -13,9 +13,10 @@ BEGIN
 END;
 $$;
 
------TESTING-----
-SELECT month_from_date('2021-08-22'); -- AUGUST SHOULD BE THE ANSWER --
+-----TESTING FUNCTION IN SECTION B-----
+SELECT month_from_date('2021-08-22 15:30:00'); -- AUGUST SHOULD BE THE ANSWER --
 
+-----CREATING DETAILED TABLE FOR SECTION C-----
 CREATE TABLE detailed_table_rentals_month (
     rental_date TIMESTAMP,
     category_name VARCHAR(45),
@@ -23,24 +24,57 @@ CREATE TABLE detailed_table_rentals_month (
     film_title VARCHAR(255),
     store_id INT,
     customer_id INT,
-    rental_id INT,  -- Define rental_id column separately
-    PRIMARY KEY(rental_id),  -- Define primary key constraint at the bottom
-    FOREIGN KEY(rental_id) REFERENCES rental(rental_id)  -- Define foreign key constraint
+    rental_id INT 
 );
 
-
-
+-----CREATING SUMMARY TABLE FOR SECTION C-----
 CREATE TABLE summary_table_rentals_month(
 	month VARCHAR,
 	category_name VARCHAR(50),
-	total_rentals INT,
-	PRIMARY KEY(month, category_name)
+	total_rentals INT
 );
-
+-----CHECKING TABLES IN SECTION C-----
 SELECT * FROM detailed_table_rentals_month;
-SELECT * FROM summary_table_rentals_month ORDER BY total_rentals ASC
-LIMIT 15
+SELECT * FROM summary_table_rentals_month ORDER BY month, total_rentals ASC ;
 
+----- SECTION E TRIGGER FUNCTION FOR SUMMARY TABLE-----
+CREATE OR REPLACE FUNCTION trigger_summary()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+   
+    DELETE FROM summary_table_rentals_month;
+
+    
+    INSERT INTO summary_table_rentals_month (month, category_name, total_rentals)
+    SELECT 
+        month,
+        category_name,
+        total_rentals
+    FROM (
+        SELECT 
+            month_from_date(d.rental_date) AS month,
+            d.category_name,
+            COUNT(*) AS total_rentals,
+            ROW_NUMBER() OVER (PARTITION BY month_from_date(d.rental_date) ORDER BY COUNT(*) DESC) AS rank --TO SHOW TOP CATEGORY INSTEAD OF ALL CATEGORIES FOR SIMPLICITY
+        FROM 
+            detailed_table_rentals_month d
+        GROUP BY 
+            month_from_date(d.rental_date), d.category_name
+    ) AS ranked
+    WHERE ranked.rank = 1;
+
+    RETURN NEW; 
+END;
+$$;
+
+CREATE TRIGGER summary_trigger_fn
+AFTER INSERT OR DELETE OR UPDATE ON detailed_table_rentals_month
+FOR EACH STATEMENT 
+EXECUTE FUNCTION trigger_summary();
+
+-----SECTION D INSERTING THE RAW DATA INTO THE DETAIL TABLE, THIS WILL ALSO POPULATE THE SUMMARY TABLE AS WELL-----
 INSERT INTO detailed_table_rentals_month (rental_id, rental_date, category_name, rental_count, film_title, store_id, customer_id)
 SELECT 
     r.rental_id,
@@ -63,41 +97,31 @@ JOIN
 JOIN 
     category c ON fc.category_id = c.category_id
 WHERE 
-    r.rental_date >= '2005-07-01 00:00:00'
-    AND r.rental_date <= '2005-08-31 23:59:59'
+    r.rental_date >= '2005-06-01 00:00:00'
+    AND r.rental_date <= '2005-09-30 23:59:59'
 GROUP BY 
     r.rental_id, r.rental_date, c.name, f.title, i.store_id, r.customer_id;
 
+-----CHECK IF DATA POPULATED CORRECTLY IN BOTH TABLES-----
+SELECT * FROM detailed_table_rentals_month;
+SELECT * FROM summary_table_rentals_month ORDER BY month, total_rentals ASC ;
 
-CREATE OR REPLACE FUNCTION trigger_summary()
-RETURNS TRIGGER 
-LANGUAGE plpgsql
-AS $$
-BEGIN
-	DELETE FROM summary_table_rentals_month;
-	INSERT INTO summary_table_rentals_month (month, category_name, total_rentals)
-	SELECT month_from_date(rental_date),
-	d.category_name,
-	COUNT(*)
-	FROM detailed_table_rentals_month d
-	GROUP BY month_from_date(rental_date), d.category_name;
-	RETURN NEW;
-END;
-$$
+-- INSERT INTO DETAILED TABLE--
+INSERT INTO detailed_table_rentals_month (rental_date, category_name, rental_count, film_title, store_id, customer_id)
+VALUES
+    ('2005-09-15 10:00:00', 'Comedy', 250, 'The Great Laugh', 1, 201);
 
-CREATE TRIGGER summary_trigger_fn
-AFTER INSERT OR DELETE OR UPDATE ON detailed_table_rentals_month
-FOR EACH STATEMENT 
-EXECUTE FUNCTION trigger_summary();
-		
+
+----- SECTION F STORED PROCEDURE TO REFRESH DATA -----
 CREATE OR REPLACE PROCEDURE rentals_refresh()
 LANGUAGE plpgsql
 AS $$
 BEGIN
 	DELETE FROM detailed_table_rentals_month;
     
-    INSERT INTO detailed_table_rentals_month (rental_timestamp, category_name, rental_count, film_title, store_id, customer_id)
+    INSERT INTO detailed_table_rentals_month (rental_id, rental_date, category_name, rental_count, film_title, store_id, customer_id)
     SELECT
+		r.rental_id,
         r.rental_date,
         c.name AS category_name,
         COUNT(*) AS rental_count,
@@ -117,17 +141,21 @@ BEGIN
     JOIN
         category c ON fc.category_id = c.category_id
     WHERE
-        r.rental_date >= '2005-07-01 00:00:00' 
-        AND r.rental_date <= '2005-08-31 23:59:59'  -- Up to the last second of August 31st
+        r.rental_date >= '2005-06-01 00:00:00' 
+        AND r.rental_date <= '2005-09-30 23:59:59'  -- Up to the last second of September 31st
     GROUP BY
-        r.rental_date, c.name, f.title, i.store_id, r.customer_id;
+        r.rental_id, r.rental_date, c.name, f.title, i.store_id, r.customer_id;
 	RETURN;
 END;
 $$
 
-CALL rentals_refresh();
+CALL rentals_refresh(); -----CALLING THAT REFRESH -----
 
-SELECT * FROM detailed_table_rentals_month;
+SELECT * FROM detailed_table_rentals_month; 
 SELECT * FROM summary_table_rentals_month;
+
+
+
+
 
 
